@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenCV.js - Фильтры изображений</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            margin: 5px;
+            padding: 10px 15px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0b7dda;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .image-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .image-box {
+            text-align: center;
+        }
+        canvas {
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            max-width: 100%;
+            height: auto;
+        }
+        .info {
+            text-align: center;
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e3f2fd;
+            border-radius: 5px;
+            color: #1976d2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 OpenCV.js - Обработка изображений</h1>
+        
+        <div class="controls">
+            <input type="file" id="imageUpload" accept="image/*">
+        </div>
+        
+        <div class="filters">
+            <button id="grayBtn" disabled>Оттенки серого</button>
+            <button id="blurBtn" disabled>Размытие</button>
+            <button id="edgeBtn" disabled>Обнаружение границ</button>
+            <button id="thresholdBtn" disabled>Бинаризация</button>
+            <button id="resetBtn" disabled>Сбросить</button>
+        </div>
+        
+        <div class="image-container">
+            <div class="image-box">
+                <h3>Оригинал</h3>
+                <canvas id="originalCanvas"></canvas>
+            </div>
+            <div class="image-box">
+                <h3>Результат</h3>
+                <canvas id="resultCanvas"></canvas>
+            </div>
+        </div>
+        
+        <div class="info" id="info">
+            Загрузите изображение для начала работы
+        </div>
+    </div>
+
+    <script async src="https://docs.opencv.org/4.8.0/opencv.js"></script>
+    <script>
+        let originalMat = null;
+        let currentMat = null;
+        let imageLoaded = false;
+        
+        // Ждем загрузки OpenCV
+        function waitForOpenCV() {
+            return new Promise((resolve) => {
+                if (typeof cv !== 'undefined') {
+                    resolve();
+                } else {
+                    const checkInterval = setInterval(() => {
+                        if (typeof cv !== 'undefined') {
+                            clearInterval(checkInterval);
+                            resolve();
+                        }
+                    }, 100);
+                }
+            });
+        }
+        
+        // Инициализация
+        waitForOpenCV().then(() => {
+            console.log('OpenCV.js готов к работе');
+            enableButtons(true);
+            document.getElementById('info').innerHTML = '✅ OpenCV загружен. Загрузите изображение!';
+        });
+        
+        function enableButtons(enabled) {
+            const buttons = ['grayBtn', 'blurBtn', 'edgeBtn', 'thresholdBtn', 'resetBtn'];
+            buttons.forEach(id => {
+                document.getElementById(id).disabled = !enabled;
+            });
+        }
+        
+        // Загрузка изображения
+        document.getElementById('imageUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    // Отображаем на canvas
+                    const canvas = document.getElementById('originalCanvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    // Очищаем результат
+                    const resultCanvas = document.getElementById('resultCanvas');
+                    resultCanvas.width = img.width;
+                    resultCanvas.height = img.height;
+                    
+                    // Создаем матрицу OpenCV
+                    if (originalMat) originalMat.delete();
+                    if (currentMat) currentMat.delete();
+                    
+                    originalMat = cv.imread(canvas);
+                    currentMat = originalMat.clone();
+                    
+                    imageLoaded = true;
+                    document.getElementById('info').innerHTML = '✅ Изображение загружено. Выберите фильтр!';
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        // Обновление результата
+        function updateResult() {
+            if (!imageLoaded || !currentMat) return;
+            
+            const resultCanvas = document.getElementById('resultCanvas');
+            resultCanvas.width = currentMat.cols;
+            resultCanvas.height = currentMat.rows;
+            cv.imshow(resultCanvas, currentMat);
+        }
+        
+        // Фильтр: оттенки серого
+        document.getElementById('grayBtn').addEventListener('click', function() {
+            if (!imageLoaded) return;
+            
+            try {
+                let grayMat = new cv.Mat();
+                cv.cvtColor(currentMat, grayMat, cv.COLOR_RGBA2GRAY, 0);
+                currentMat.delete();
+                currentMat = grayMat;
+                updateResult();
+                document.getElementById('info').innerHTML = '🎨 Применен фильтр: Оттенки серого';
+            } catch (err) {
+                console.error(err);
+                document.getElementById('info').innerHTML = '❌ Ошибка при применении фильтра';
+            }
+        });
+        
+        // Фильтр: размытие
+        document.getElementById('blurBtn').addEventListener('click', function() {
+            if (!imageLoaded) return;
+            
+            try {
+                let blurMat = new cv.Mat();
+                let ksize = new cv.Size(5, 5);
+                cv.GaussianBlur(currentMat, blurMat, ksize, 0);
+                currentMat.delete();
+                currentMat = blurMat;
+                updateResult();
+                document.getElementById('info').innerHTML = '🌀 Применен фильтр: Размытие';
+            } catch (err) {
+                console.error(err);
+                document.getElementById('info').innerHTML = '❌ Ошибка при применении фильтра';
+            }
+        });
+        
+        // Фильтр: обнаружение границ (Canny)
+        document.getElementById('edgeBtn').addEventListener('click', function() {
+            if (!imageLoaded) return;
+            
+            try {
+                let grayMat = new cv.Mat();
+                let edgesMat = new cv.Mat();
+                
+                // Преобразуем в оттенки серого, если нужно
+                if (currentMat.channels() > 1) {
+                    cv.cvtColor(currentMat, grayMat, cv.COLOR_RGBA2GRAY);
+                } else {
+                    grayMat = currentMat.clone();
+                }
+                
+                cv.Canny(grayMat, edgesMat, 50, 100);
+                currentMat.delete();
+                currentMat = edgesMat;
+                grayMat.delete();
+                updateResult();
+                document.getElementById('info').innerHTML = '🔍 Применен фильтр: Обнаружение границ (Canny)';
+            } catch (err) {
+                console.error(err);
+                document.getElementById('info').innerHTML = '❌ Ошибка при применении фильтра';
+            }
+        });
+        
+        // Фильтр: бинаризация
+        document.getElementById('thresholdBtn').addEventListener('click', function() {
+            if (!imageLoaded) return;
+            
+            try {
+                let grayMat = new cv.Mat();
+                let thresholdMat = new cv.Mat();
+                
+                // Преобразуем в оттенки серого
+                if (currentMat.channels() > 1) {
+                    cv.cvtColor(currentMat, grayMat, cv.COLOR_RGBA2GRAY);
+                } else {
+                    grayMat = currentMat.clone();
+                }
+                
+                cv.threshold(grayMat, thresholdMat, 127, 255, cv.THRESH_BINARY);
+                currentMat.delete();
+                currentMat = thresholdMat;
+                grayMat.delete();
+                updateResult();
+                document.getElementById('info').innerHTML = '⚫ Применен фильтр: Бинаризация';
+            } catch (err) {
+                console.error(err);
+                document.getElementById('info').innerHTML = '❌ Ошибка при применении фильтра';
+            }
+        });
+        
+        // Сброс
+        document.getElementById('resetBtn').addEventListener('click', function() {
+            if (!imageLoaded || !originalMat) return;
+            
+            if (currentMat) currentMat.delete();
+            currentMat = originalMat.clone();
+            updateResult();
+            document.getElementById('info').innerHTML = '🔄 Изображение сброшено к оригиналу';
+        });
+        
+        // Очистка памяти при закрытии страницы
+        window.addEventListener('beforeunload', function() {
+            if (originalMat) originalMat.delete();
+            if (currentMat) currentMat.delete();
+        });
+    </script>
+</body>
+</html>

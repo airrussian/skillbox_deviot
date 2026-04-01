@@ -2,10 +2,26 @@
 #include <stdlib.h>
 #include <time.h>
 
-void open(int fig) {
-}
+#define SIZE 5
 
-bool find(signed char a[5][5], int fig) {
+void open(
+    signed char gameField[SIZE][SIZE], 
+    signed char openCells[SIZE][SIZE], 
+    int target, int row, int col
+) {
+    if (row < 0 || row >= SIZE || col < 0 || col >= SIZE) return;      
+
+    // Если клетка уже открыта или не содержит нужное значение — выходим
+    if (openCells[row][col] == 1 || gameField[row][col] != target) return;
+
+    // Открываем текущую клетку    
+    openCells[row][col] = 1;
+    
+    // Рекурсивно проверяем соседние клетки (по горизонтали и вертикали)
+    open(gameField, openCells, target, row + 1, col);
+    open(gameField, openCells, target, row - 1, col);
+    open(gameField, openCells, target, row, col + 1);
+    open(gameField, openCells, target, row, col - 1);
 }
 
 void outputDesk(signed char desk[5][5]) {
@@ -16,7 +32,7 @@ void outputDesk(signed char desk[5][5]) {
     }
 }
 
-void randDesk(signed char desk[5][5]) {
+void randDesk(signed char desk[5][5] ) {
     srand(time(NULL));
     for ( int y = 0; y < 5; y++ ) 
         for (int x = 0; x < 5; x++)
@@ -26,22 +42,36 @@ void randDesk(signed char desk[5][5]) {
 
 int main() {
 
-    signed char desk[5][5];
-    bool openCell[5][5] = {{0,0,0,0,0},{0,0,0,0,0},{0,0,0,0,0},{0,0,0,0,0},{0,0,0,0,0}};
+    signed char desk[SIZE][SIZE];     // Игровое поле 
+    signed char openCell[SIZE][SIZE] = {{0,0,0,0,0},{0,0,0,0,0},{0,0,0,0,0},{0,0,0,0,0},{0,0,0,0,0}};
 
-    randDesk(desk); 
-    outputDesk(desk);   
+    randDesk(desk);                     // Случайно заполняем игровое поле значениями от 0 до 127
+    outputDesk(desk);                   // Выводим поле ( для отладки и проверки )
 
     while (1)
     {    
         signed char fig;
-        printf("Введи число от 0 до 127?");
-        scanf("%sc", &fig);
-        if ( fig < 0 || fig > 127 ) break;        
-        printf("%d \n", fig);        
-        if ( find(desk, fig) ) open(desk, openCell, fig);
+        printf("\nВведите целевое значение (от 0 до 127): ");
+        do {
+            scanf("%hhd", &fig);
+            if (fig < 0 || fig > 127) {
+                printf("Ошибка! Число должно быть от 0 до 127. Повторите ввод: ");
+            }
+        } while (fig < 0 || fig > 127);
+
+        for (int i = 0; i < SIZE; i++) {
+            for (int j = 0; j < SIZE; j++) {
+                if (desk[i][j] == fig && openCell[i][j] == 0) {
+                    open(desk, openCell, fig, i, j);
+                }
+            }
+        }
+
+        printf("%d \n", fig);
+
+        open( desk, openCell, fig, 0, 0 );
+        outputDesk(openCell);
     }
-    
 
     return 0;
 }
